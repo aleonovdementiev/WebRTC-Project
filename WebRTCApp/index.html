@@ -5,26 +5,43 @@
         <meta charset="utf-8">
         <title>WebRTC Demo Project</title>
 
-
+        <!-- Libs assertion -->
         <script src="Libs/adapter.js" charset="utf-8"></script>
         <script src="Libs/jquery-2.1.4.js" charset="utf-8"></script>
+        <script src="Libs/underscore.js" charset="utf-8"></script>
+        <script src="Libs/backbone.js" charset="utf-8"></script>
+
+        <!-- Templates assertion -->
+        <script type="text/template" id="videoTpl">
+            <video autoplay></video>
+        </script>
+        <script type="text/template" id="controlsTpl">
+            <button class="startButton">Start</button>
+            <button class="callButton">Call</button>
+            <button class="hangupButton">Hang Up</button>
+        </script>
+        <script type="text/template" id="mainTpl">
+            <h1>
+                <span>WebRTC Demo App</span>
+            </h1>
+            <div class="videoContainer"></div>
+            <div class="buttonsContainer"></div>
+        </script>
+
+        <!-- Views assertion -->
+        <script src="Scripts/Views/VideoView.js" charset="utf-8"></script>
+        <script src="Scripts/Views/ControlsView.js" charset="utf-8"></script>
+        <script src="Scripts/Views/MainView.js" charset="utf-8"></script>
+
+        <!-- Main js -->
         <script src="Scripts/main.js" charset="utf-8"></script>
     </head>
 
     <body>
         <div class="container">
-            <h1>
-                <span>WebRTC Demo App</span>
-            </h1>
 
-            <video class="localVideo" autoplay muted></video>
+
             <video class="remoteVideo" autoplay></video>
-
-            <div>
-              <button class="startButton">Start</button>
-              <button class="callButton">Call</button>
-              <button class="hangupButton">Hang Up</button>
-            </div>
 
             <div class="errorMsg"></div>
         </div>
