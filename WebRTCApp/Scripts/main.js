@@ -1,45 +1,209 @@
 'use strict';
 
 $(function () {
-    var $video = $('.localVideoContainer')[0],
-        constraints = window.constraints = {
-            audio: false,
+    var $startButton = $('.startButton'),
+        $callButton = $('.callButton'),
+        $hangupButton = $('.hangupButton'),
+        offerOptions,
+        $remoteVideo,
+        $localVideo,
+        localStream,
+        startTime,
+        pc1,
+        pc2;
+
+    $callButton.prop('disabled', true);
+    $hangupButton.prop('disabled', true);
+    $startButton.on('click', start);
+    $callButton.on('click', call);
+    $hangupButton.on('click', hangup);
+    $localVideo = $('.localVideo')[0];
+    $remoteVideo = $('.remoteVideo')[0];
+
+    $localVideo.on('loadedmetadata', function() {
+        trace('Local video videoWidth: ' + this.videoWidth +
+            'px,  videoHeight: ' + this.videoHeight + 'px');
+    });
+
+    $remoteVideo.on('loadedmetadata', function() {
+        trace('Remote video videoWidth: ' + this.videoWidth +
+            'px,  videoHeight: ' + this.videoHeight + 'px');
+    });
+
+    $remoteVideo.onresize = function() {
+        var elapsedTime;
+
+        trace('Remote video size changed to ' +
+        $remoteVideo.videoWidth + 'x' + $remoteVideo.videoHeight);
+        // We'll use the first onsize callback as an indication that video has started
+        // playing out.
+        if (startTime) {
+            elapsedTime = window.performance.now() - startTime;
+            trace('Setup time: ' + elapsedTime.toFixed(3) + 'ms');
+            startTime = null;
+        }
+    };
+
+    offerOptions = {
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 1
+    };
+
+    function getName(pc) {
+        return (pc === pc1) ? 'pc1' : 'pc2';
+    }
+
+    function getOtherPc(pc) {
+        return (pc === pc1) ? pc2 : pc1;
+    }
+
+    function gotStream(stream) {
+        trace('Received local stream');
+        $localVideo.srcObject = stream;
+        localStream = stream;
+        $callButton.prop('disabled', false);
+    }
+
+    function start () {
+        var constraints = {
+            audio: true,
             video: true
-        },
-        $errorElement = $('.errorMsg')[0],
-        successCallback,
-        errorCallback;
-
-    successCallback = function (stream) {
-        var videoTracks = stream.getVideoTracks();
-        console.log('Got stream with constraints:', constraints);
-        console.log('Using video device: ' + videoTracks[0].label);
-        stream.onended = function() {
-        console.log('Stream ended');
         };
-        window.stream = stream;
-        $video.srcObject = stream;
+
+        trace('Requesting local stream');
+        $startButton.prop('disabled', true);
+        navigator.getUserMedia(constraints, gotStream, function(e) {
+            alert('getUserMedia() error: ' + e.name);
+        });
     }
 
-    errorCallback = function(error) {
-        if (error.name === 'ConstraintNotSatisfiedError') {
-        errorMsg('The resolution ' + constraints.video.width.exact + 'x' +
-            constraints.video.width.exact + ' px is not supported by your device.');
-        } else if (error.name === 'PermissionDeniedError') {
-        errorMsg('Permissions have not been granted to use your camera and ' +
-          'microphone, you need to allow the page access to your devices in ' +
-          'order for the demo to work.');
+    function call() {
+        var videoTracks = localStream.getVideoTracks(),
+            audioTracks = localStream.getAudioTracks();
+
+        $callButton.prop('disabled', true);
+        $hangupButton.prop('disabled', false);
+        trace('Starting call');
+        startTime = window.performance.now();
+
+        if (videoTracks.length > 0) {
+            trace('Using video device: ' + videoTracks[0].label);
         }
-        errorMsg('getUserMedia error: ' + error.name, error);
+        if (audioTracks.length > 0) {
+            trace('Using audio device: ' + audioTracks[0].label);
+        }
+        var servers = null;
+        pc1 = new RTCPeerConnection(servers);
+        trace('Created local peer connection object pc1');
+        pc1.onicecandidate = function(e) {
+            onIceCandidate(pc1, e);
+        };
+        pc2 = new RTCPeerConnection(servers);
+        trace('Created remote peer connection object pc2');
+        pc2.onicecandidate = function(e) {
+            onIceCandidate(pc2, e);
+        };
+        pc1.oniceconnectionstatechange = function(e) {
+            onIceStateChange(pc1, e);
+        };
+        pc2.oniceconnectionstatechange = function(e) {
+            onIceStateChange(pc2, e);
+        };
+        pc2.onaddstream = gotRemoteStream;
+
+        pc1.addStream(localStream);
+        trace('Added local stream to pc1');
+
+        trace('pc1 createOffer start');
+        pc1.createOffer(onCreateOfferSuccess, onCreateSessionDescriptionError, offerOptions);
     }
 
-    function errorMsg(msg, error) {
-        $errorElement.innerHTML += '<p>' + msg + '</p>';
-        if (typeof error !== 'undefined') {
-            console.error(error);
+    function onCreateSessionDescriptionError(error) {
+        trace('Failed to create session description: ' + error.toString());
+    }
+
+    function onCreateOfferSuccess(desc) {
+        trace('Offer from pc1\n' + desc.sdp);
+        trace('pc1 setLocalDescription start');
+        pc1.setLocalDescription(desc, function() {
+            onSetLocalSuccess(pc1);
+        }, onSetSessionDescriptionError);
+        trace('pc2 setRemoteDescription start');
+        pc2.setRemoteDescription(desc, function() {
+            onSetRemoteSuccess(pc2);
+        }, onSetSessionDescriptionError);
+        trace('pc2 createAnswer start');
+        // Since the 'remote' side has no media stream we need
+        // to pass in the right constraints in order for it to
+        // accept the incoming offer of audio and video.
+        pc2.createAnswer(onCreateAnswerSuccess, onCreateSessionDescriptionError);
+    }
+
+    function onSetLocalSuccess(pc) {
+        trace(getName(pc) + ' setLocalDescription complete');
+    }
+
+    function onSetRemoteSuccess(pc) {
+        trace(getName(pc) + ' setRemoteDescription complete');
+    }
+
+    function onSetSessionDescriptionError(error) {
+        trace('Failed to set session description: ' + error.toString());
+    }
+
+    function gotRemoteStream(e) {
+        $remoteVideo.srcObject = e.stream;
+        trace('pc2 received remote stream');
+    }
+
+    function onCreateAnswerSuccess(desc) {
+        trace('Answer from pc2:\n' + desc.sdp);
+        trace('pc2 setLocalDescription start');
+        pc2.setLocalDescription(desc, function() {
+            onSetLocalSuccess(pc2);
+        }, onSetSessionDescriptionError);
+        trace('pc1 setRemoteDescription start');
+        pc1.setRemoteDescription(desc, function() {
+            onSetRemoteSuccess(pc1);
+        }, onSetSessionDescriptionError);
+    }
+
+    function onIceCandidate(pc, event) {
+        if (event.candidate) {
+            getOtherPc(pc).addIceCandidate(new RTCIceCandidate(event.candidate),
+                function() {
+                    onAddIceCandidateSuccess(pc);
+                },
+                function(err) {
+                    onAddIceCandidateError(pc, err);
+                }
+            );
+        trace(getName(pc) + ' ICE candidate: \n' + event.candidate.candidate);
         }
     }
 
-    navigator.getUserMedia(constraints, successCallback, errorCallback);
+    function onAddIceCandidateSuccess(pc) {
+        trace(getName(pc) + ' addIceCandidate success');
+    }
 
+    function onAddIceCandidateError(pc, error) {
+        trace(getName(pc) + ' failed to add ICE Candidate: ' + error.toString());
+    }
+
+    function onIceStateChange(pc, event) {
+        if (pc) {
+            trace(getName(pc) + ' ICE state: ' + pc.iceConnectionState);
+            console.log('ICE state change event: ', event);
+        }
+    }
+
+    function hangup() {
+        trace('Ending call');
+        pc1.close();
+        pc2.close();
+        pc1 = null;
+        pc2 = null;
+        $hangupButton.prop('disabled', true);
+        $callButton.prop('disabled', false);
+    }
 });

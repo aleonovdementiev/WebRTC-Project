@@ -17,7 +17,14 @@
                 <span>WebRTC Demo App</span>
             </h1>
 
-            <video id="gum-local" class="localVideoContainer" autoplay></video>
+            <video class="localVideo" autoplay muted></video>
+            <video class="remoteVideo" autoplay></video>
+
+            <div>
+              <button class="startButton">Start</button>
+              <button class="callButton">Call</button>
+              <button class="hangupButton">Hang Up</button>
+            </div>
 
             <div class="errorMsg"></div>
         </div>
