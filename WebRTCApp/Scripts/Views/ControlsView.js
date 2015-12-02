@@ -4,7 +4,7 @@ var ControlsView = Backbone.View.extend({
     template: _.template($("#controlsTpl").html()),
 
     events: {
-        'click .startButton': 'startVideo'
+        'click .callButton': 'startCalling'
     },
 
     initialize: function () {
@@ -12,6 +12,11 @@ var ControlsView = Backbone.View.extend({
 
     render: function () {
         this.$el.html(this.template());
+
+        this.toggleCallButtonDisabled(true);
+        this.toggleHangButtonDisabled(true);
+
+        this.startVideo()
 
         return this.$el;
     },
@@ -34,12 +39,18 @@ var ControlsView = Backbone.View.extend({
     },
 
     toggleHangButtonDisabled: function (state) {
-        this.$('.callButton').prop('disabled', state);
+        this.$('.hangButton').prop('disabled', state);
     },
 
     gotStream: function (stream) {
         trace('Received local stream');
         this.trigger('setLocalStream', stream);
         this.toggleCallButtonDisabled(false);
+    },
+
+    startCalling: function () {
+        this.trigger('startCalling');
+        this.toggleCallButtonDisabled(true);
+        this.toggleHangButtonDisabled(false);
     }
 })
